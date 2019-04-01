@@ -52,30 +52,30 @@ curl -LsS https://api.mullvad.net/public/relays/wireguard/v1/ \
     if [ -z "$key" ] && [ -f "$conf" ]; then
         key="$(sed -rn 's/^PrivateKey *= *([a-zA-Z0-9+/]{43}=) *$/\1/ip' <"$conf")"
 
-	if [ -n "$key" ]; then
-                echo "[+] Using existing private key."
+        if [ -n "$key" ]; then
+            echo "[+] Using existing private key."
         fi
     fi
 
     if [ -z "$key" ]; then
-	    echo "[+] Generating new private key."
-	    key="$(wg genkey)"
+        echo "[+] Generating new private key."
+        key="$(wg genkey)"
     fi
 
     if [ -z "$mypubkey" ]; then
-            mypubkey="$(printf '%s\n' "$key" | wg pubkey)"
+        mypubkey="$(printf '%s\n' "$key" | wg pubkey)"
     fi
 
     if [ -z "$myipaddr" ]; then
-            echo "[+] Contacting Mullvad API."
-            res="$(curl -sSL https://api.mullvad.net/wg/ \
-                        -d account="$ACCOUNT" \
-                        --data-urlencode pubkey="$mypubkey")"
-            if ! printf '%s\n' "$res" | grep -E '^[0-9a-f:/.,]+$' >/dev/null
-            then
-                    die "$res"
-            fi
-            myipaddr=$res
+        echo "[+] Contacting Mullvad API."
+        res="$(curl -sSL https://api.mullvad.net/wg/ \
+                    -d account="$ACCOUNT" \
+                    --data-urlencode pubkey="$mypubkey")"
+        if ! printf '%s\n' "$res" | grep -E '^[0-9a-f:/.,]+$' >/dev/null
+        then
+            die "$res"
+        fi
+        myipaddr=$res
     fi
 
     mkdir -p /etc/wireguard/
