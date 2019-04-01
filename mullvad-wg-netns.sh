@@ -159,6 +159,19 @@ ip -netns "$nsname" link set dev "$ifname" up
 
 ip -netns "$nsname" route add default dev "$ifname"
 ip -netns "$nsname" -6 route add default dev "$ifname"
+del() {
+nsname=$1;
+ifname="wg-$nsname"
+
+if [ -e /sys/class/net/"$ifname" ]; then
+  ip link del dev "$ifname"
+fi
+
+if ip netns exec "$nsname" [ -e /sys/class/net/"$ifname" ]; then
+  ip -netns "$nsname" link del dev "$ifname"
+fi
+
+ip netns delete "$nsname"
 }
 
 list() {
