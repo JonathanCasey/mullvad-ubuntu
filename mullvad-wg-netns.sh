@@ -163,6 +163,12 @@ echo "nameserver 1.1.1.1" >> "/etc/netns/$nsname/resolv.conf"
 
 ip -netns "$nsname" route add default dev "$ifname"
 ip -netns "$nsname" -6 route add default dev "$ifname"
+
+if [ ! -z "$SUDO_USER" ]; then
+  echo "ip netns exec $nsname sudo -i -u '$SUDO_USER'"
+fi
+}
+
 del() {
 nsname=$1;
 ifname="wg-$nsname"
