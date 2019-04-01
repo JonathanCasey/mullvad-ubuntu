@@ -1,11 +1,10 @@
-dxld's mullvad config
-=====================
+wireguard mullvad network namespace wrapper
+===========================================
 
 Overview
 --------
 
-I use libpam-net to segregate a dedicated system user into a network namespace
-which can only talk to the outside world through a wireguard interface.
+Based on DanielG/dxld-mullvad
 
 [`mullvad-wg-netns.sh`](mullvad-wg-netns.sh) implements the provisioning of the
 wireguard configs (generating privkey, uploading pubkey to mullvad API etc.). It
