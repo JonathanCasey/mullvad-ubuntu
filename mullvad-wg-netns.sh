@@ -117,7 +117,7 @@ echo "Please wait up to 60 seconds for your public key to be added to the server
 }
 
 init() {
-
+set -x
 if [ "$(id -u)" != "0" ]; then
   echo "$0 $cmd must be run as root"
   exit 1
@@ -131,7 +131,7 @@ if [ -e /sys/class/net/"$ifname" ]; then
         ip link del dev "$ifname"
 fi
 
-if ip netns exec "$nsname" [ -e /sys/class/net/"$ifname" ]; then
+if ip netns exec "$nsname" [ -e /sys/class/net/"$ifname" ] 2>/dev/null; then
         ip -netns "$nsname" link del dev "$ifname"
 fi
 
