@@ -157,6 +157,10 @@ ip -netns "$nsname" link set dev "$ifname" up
     done
 )
 
+mkdir -p "/etc/netns/$nsname"
+echo "nameserver 8.8.8.8" > "/etc/netns/$nsname/resolv.conf"
+echo "nameserver 1.1.1.1" >> "/etc/netns/$nsname/resolv.conf"
+
 ip -netns "$nsname" route add default dev "$ifname"
 ip -netns "$nsname" -6 route add default dev "$ifname"
 del() {
