@@ -50,7 +50,7 @@ curl -LsS https://api.mullvad.net/public/relays/wireguard/v1/ \
 
     conf="/etc/wireguard/mullvad-${code}.conf"
     if [ -z "$key" ] && [ -f "$conf" ]; then
-        key="$(sed -rn 's/^PrivateKey *= *([a-zA-Z0-9+/]{43}=) *$/\1/ip' <$conf)"
+        key="$(sed -rn 's/^PrivateKey *= *([a-zA-Z0-9+/]{43}=) *$/\1/ip' <"$conf")"
 
 	if [ -n "$key" ]; then
                 echo "[+] Using existing private key."
@@ -141,8 +141,7 @@ if ! [ -e /var/run/netns/"$nsname" ]; then
 fi
 
 ip link set "$ifname" netns "$nsname"
-cat /etc/wireguard/"$cfgname" \
-        | grep -vi '^Address\|^DNS' \
+grep -vi '^Address\|^DNS' /etc/wireguard/"$cfgname" \
         | ip netns exec "$nsname"  wg setconf "$ifname" /dev/stdin
 
 addrs="$(sed -rn 's/^Address *= *([0-9a-fA-F:/.,]+) *$/\1/ip' < /etc/wireguard/"$cfgname")"
