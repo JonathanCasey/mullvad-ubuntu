@@ -161,6 +161,12 @@ ip -netns "$nsname" route add default dev "$ifname"
 ip -netns "$nsname" -6 route add default dev "$ifname"
 }
 
+list() {
+  echo "Configs:"
+  find /etc/wireguard -name 'mullvad-*' -printf "%f\n" | column
+  printf "\nNamespaces:\n"
+  ip netns
+}
 
 set -e
 
