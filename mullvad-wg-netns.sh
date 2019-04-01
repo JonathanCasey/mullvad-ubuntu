@@ -15,6 +15,12 @@ die() {
 }
 
 provision() {
+
+if [ `id -u` != 0 ]; then
+  echo "$0 $cmd must be run as root"
+  exit 1
+fi
+
 umask 077
 
 ACCOUNT=
@@ -111,6 +117,12 @@ echo "Please wait up to 60 seconds for your public key to be added to the server
 }
 
 init() {
+
+if [ `id -u` != 0 ]; then
+  echo "$0 $cmd must be run as root"
+  exit 1
+fi
+
 nsname=$1; shift
 cfgname=$1; shift
 ifname="wg-$nsname"
