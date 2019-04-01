@@ -171,6 +171,11 @@ fi
 }
 
 del() {
+if [ "$(id -u)" != "0" ]; then
+  echo "$0 $cmd must be run as root"
+  exit 1
+fi
+
 nsname=$1;
 ifname="wg-$nsname"
 
