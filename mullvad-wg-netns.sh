@@ -16,7 +16,7 @@ die() {
 
 provision() {
 
-if [ `id -u` != 0 ]; then
+if [ "$(id -u)" != "0" ]; then
   echo "$0 $cmd must be run as root"
   exit 1
 fi
@@ -118,7 +118,7 @@ echo "Please wait up to 60 seconds for your public key to be added to the server
 
 init() {
 
-if [ `id -u` != 0 ]; then
+if [ "$(id -u)" != "0" ]; then
   echo "$0 $cmd must be run as root"
   exit 1
 fi
