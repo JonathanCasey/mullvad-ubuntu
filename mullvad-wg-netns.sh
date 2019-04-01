@@ -166,7 +166,7 @@ ip -netns "$nsname" route add default dev "$ifname"
 ip -netns "$nsname" -6 route add default dev "$ifname"
 
 if [ ! -z "$SUDO_USER" ]; then
-  echo "ip netns exec $nsname sudo -i -u '$SUDO_USER'"
+  echo "sudo ip netns exec $nsname su '$SUDO_USER'"
 fi
 }
 
