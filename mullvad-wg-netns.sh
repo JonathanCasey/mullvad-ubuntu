@@ -15,6 +15,12 @@ die() {
 }
 
 provision() {
+
+if [ "$(id -u)" != "0" ]; then
+  echo "$0 $cmd must be run as root"
+  exit 1
+fi
+
 umask 077
 
 ACCOUNT=
@@ -116,6 +122,12 @@ echo "Please wait up to 60 seconds for your public key to be added to the server
 }
 
 init () {
+set -x
+if [ "$(id -u)" != "0" ]; then
+  echo "$0 $cmd must be run as root"
+  exit 1
+fi
+
 nsname=$1; shift
 cfgname=$1; shift
 parentns=${parentns:-}
@@ -135,17 +147,17 @@ else
 fi
 
 # Check for old wg interfaces in (1) current namespace,
-if [ -z "$parentns" ] && [ -e /sys/class/net/"$wgifname" ]; then
+if [ -z "$parentns" ] && [ -e /sys/class/net/"$wgifname" ] 2>/dev/null; then
         ip link del dev "$wgifname"
 fi
 
 # (2) parent namespace and
-if ip netns exec "$parentns" [ -e /sys/class/net/"$wgifname" ]; then
+if ip netns exec "$parentns" [ -e /sys/class/net/"$wgifname" ] 2>/dev/null; then
         ip -netns "$parentns" link del dev "$wgifname"
 fi
 
 # (3) target namespace.
-if ip netns exec "$nsname" [ -e /sys/class/net/"$wgifname" ]; then
+if ip netns exec "$nsname" [ -e /sys/class/net/"$wgifname" ] 2>/dev/null; then
         ip -netns "$nsname" link del dev "$wgifname"
 fi
 
@@ -177,11 +189,46 @@ ip -netns "$nsname" link set dev "$wgifname" up
     done
 )
 
+mkdir -p "/etc/netns/$nsname"
+echo "nameserver 193.138.218.74" > "/etc/netns/$nsname/resolv.conf"
+#echo "nameserver 10.X.0.1" > "/etc/netns/$nsname/resolv.conf"
+#echo "nameserver 8.8.8.8" > "/etc/netns/$nsname/resolv.conf"
+#echo "nameserver 1.1.1.1" >> "/etc/netns/$nsname/resolv.conf"
+
 ip -netns "$nsname" route add default dev "$wgifname"
 ip -netns "$nsname" -6 route add default dev "$wgifname"
 
-} # end init()
+if [ ! -z "$SUDO_USER" ]; then
+  echo "sudo ip netns exec $nsname su '$SUDO_USER'"
+fi
+}
 
+del() {
+if [ "$(id -u)" != "0" ]; then
+  echo "$0 $cmd must be run as root"
+  exit 1
+fi
+
+nsname=$1;
+wgifname="wg-$nsname"
+
+if [ -e /sys/class/net/"$wgifname" ]; then
+  ip link del dev "$wgifname"
+fi
+
+if ip netns exec "$nsname" [ -e /sys/class/net/"$wgifname" ]; then
+  ip -netns "$nsname" link del dev "$wgifname"
+fi
+
+ip netns delete "$nsname"
+}
+
+list() {
+  echo "Configs:"
+  find /etc/wireguard -name 'mullvad-*' -printf "%f\n" | column
+  printf "\nNamespaces:\n"
+  ip netns
+}
 
 set -e
 
