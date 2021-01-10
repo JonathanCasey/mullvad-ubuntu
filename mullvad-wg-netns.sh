@@ -185,7 +185,7 @@ ip -netns "$nsname" link set dev "$wgifname" up
 (
     IFS=','
     for addr in $addrs; do
-    	ip -netns "$nsname" addr add dev "$wgifname" "$addr"
+        ip -netns "$nsname" addr add dev "$wgifname" "$addr"
     done
 )
 
