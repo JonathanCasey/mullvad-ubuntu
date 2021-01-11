@@ -131,7 +131,7 @@ fi
 nsname=$1; shift
 cfgname=$1; shift
 parentns=${parentns:-}
-wgifname="wg-$nsname"
+wgifname="$(echo "wg-${nsname}" | cut -c1-15)"
 
 # [Note POSIX array trick]
 # Ok, this is a nasty POSIX shell trick, we use the _one_ array we have
@@ -210,7 +210,7 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 nsname=$1;
-wgifname="wg-$nsname"
+wgifname="$(echo "wg-${nsname}" | cut -c1-15)"
 
 if [ -e /sys/class/net/"$wgifname" ]; then
   ip link del dev "$wgifname"
