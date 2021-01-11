@@ -4,26 +4,56 @@ wireguard mullvad network namespace wrapper
 Overview
 --------
 
-Based on DanielG/dxld-mullvad
+Based on DanielG/dxld-mullvad with updates from Kagee/kagee-mullvad (big
+thanks! :tada:).
+
+A fantastic way to get certain apps/scripts/processes to use the VPN while
+defaulting the rest of the system to not using the VPN.  Perfect when only want
+select traffic going over VPN rather than only select traffic bypassing VPN
+(i.e. blacklist instead of whitelist) without having to mess with existing ip
+tables.  No other installation required (including mullvad's installer).
 
 [`mullvad-wg-netns.sh`](mullvad-wg-netns.sh) implements the provisioning of the
 wireguard configs (generating privkey, uploading pubkey to mullvad API etc.). It
 also supports bringing up the wireguard interface at boot since `wg-quick` does
 not support netns or operating on a pre-existing wg interface.
 
-Setup on Debian (sid)
+Setup on Ubuntu (20.04 focal)
 ---------------------
 
 First we set up dependencies and libpam-net:
 
-    $ apt-get install dateutils curl jq linux-headers-$(uname -r) wireguard-dkms wireguard-tools libpam-net
+```
+    $ apt-get install dateutils curl jq linux-headers-$(uname -r) wireguard-dkms wireguard-tools
+```
+
+Note we need at least libpam-net 0.3.  `libpam-net` looks to be added to Ubuntu
+in the upcoming 21.04 (hirsute) release as seen
+[here](https://packages.ubuntu.com/hirsute/libpam-net).  If you are lucky,
+default apt `sources.list` list in 20.04 should allow the following:
+```
+    $ apt-get udpate
+    $ apt-get install libpam-net/focal-backports
+```
+
+If unlucky like at the time of this writing, it is not [yet] in backports.  An
+alternative is to follow
+[Ubuntu's Pinning Howto](https://help.ubuntu.com/community/PinningHowto), or to
+install with the `.deb` from the link to the package above.  Personally, I
+followed pinning since the dependencies looked clear at time of writing, then
+removed `hirsute` from my `sources.list` to prevent any accidental updates (I
+had some manually installed packages that were older in `focal` but newer in
+`hirsute`, so `apt list --upgradeable | grep hirsute` /
+`apt-get upgrade --dry-run` and `apt-cache policy <package-name>` showed they
+wanted to be updated).
+
+Once all dependencies are installed, the rest of the setup can continue:
+```
     $ pam-auth-update --enable libpam-net-usernet
     $ addgroup --system usernet
     $ adduser <myuser> usernet
+```
 
-Note we need at least libpam-net 0.3, which just so happens recently came
-off the NEW queue and entered unstable. Yey!
-    
 Now whenever `<myuser>` logs in, or a service is started as them, it will
 be placed in a netns (cf. ip-netns(8)) corresponding to their
 username. This netns is created if it doesn't already exist, but the
