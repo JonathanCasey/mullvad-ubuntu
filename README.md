@@ -52,6 +52,11 @@ Once all dependencies are installed, the rest of the setup can continue:
     $ pam-auth-update --enable libpam-net-usernet
     $ addgroup --system usernet
     $ adduser <myuser> usernet
+  or for dummy user:
+    $ useradd -M -s /usr/sbin/nologin -G usernet <myuser>
+  to add existing user to the group (without needing sign out):
+    $ sudo usermod -a -G usernet <myyser>
+    $ exec su -l $USER
 ```
 
 Now whenever `<myuser>` logs in, or a service is started as them, it will
