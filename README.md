@@ -112,3 +112,22 @@ To use it put it in your `.bash_profile` or simmilar shell startup script:
 If we're not connected through mullvad it will print an error message and kill
 the shell after a short timeout so you can still get access by Ctrl-C'ing the
 script if needed.
+
+
+Other Uses
+----------
+
+This goes a bit beyond the original project intention of sandboxing based on a
+signed-in user, but these are some tips that might be helpful to use together to
+reach the overall goal of securing the system as desired.
+
+### Services
+Sandboxing a service in a network namespace may not work simply be setting the
+`User=` in the service file, at least based on preliminary testing in Ubuntu
+20.04.  Luckily, with systemd 452 and later, there is a second option.
+
+By editing the service file with `systemctl edit --full <name-of-service>`, the
+line `NetworkNamespacePath=/var/run/netns/<myuser>` can be added in the
+`[Service]` section.  After a reload and a restart of the service, it will now
+be operating in that network namespace.  The service should also fail to run if
+the network namespace does not exist, but best to test that failsafe.
