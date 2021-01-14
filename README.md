@@ -98,6 +98,16 @@ provisioning.
 To make this permanent you can simply put it in `/etc/rc.local` or create a
 systemd unit or something if you insist.
 
+For the especially paranoid that do not want endpoints that keep logs to be able
+to cross-correlate your activity, using multiple connections with multiple IP
+addresses on the same machine is very easy!
+
+All that is required is to create a namespace for each separate connection using
+a different username for each, and then be sure to use a different mullvad
+server for each (e.g. `mullvad-at1.conf` for the first and `mullvad-at2.conf`
+for the second).  No need to think about the wireguard keys, as the same one set
+of keys generated when provisioning can be used for all.
+
 
 Security
 --------
