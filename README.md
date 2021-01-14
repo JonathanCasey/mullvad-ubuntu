@@ -113,6 +113,17 @@ If we're not connected through mullvad it will print an error message and kill
 the shell after a short timeout so you can still get access by Ctrl-C'ing the
 script if needed.
 
+Some additional ways to confirm the setup is working as desired, all of which
+can be prefaced with `sudo -u <myser>` to run as that user:
+- `curl https://ipleak.net/json/` and check details.  See
+      [here](https://airvpn.org/forums/topic/14737-api/) for more details.
+- `dig +short myip.opendns.com @resolver1.opendns.com` or
+      `curl checkip.amazonaws.com` and check IP address as expected
+- `ip netns identify <pid>` to print the network namespace that process is
+using, or blank if not using one
+- `ip netns list-id` to list all network namespace IDs (including ones from
+      outside this project)
+
 
 Other Uses
 ----------
