@@ -130,6 +130,11 @@ fi
 
 nsname=$1; shift
 cfgname=$1; shift
+if [ $# -gt 0 ]; then
+        portnum=$1; shift
+else
+        portnum=0
+fi
 parentns=${parentns:-}
 wgifname="$(echo "wg-${nsname}" | cut -c1-15)"
 
@@ -198,12 +203,48 @@ echo "nameserver 193.138.218.74" > "/etc/netns/$nsname/resolv.conf"
 ip -netns "$nsname" route add default dev "$wgifname"
 ip -netns "$nsname" -6 route add default dev "$wgifname"
 
+# If portnum provided, setup veth + socat
+if [ "$portnum" -gt "0" ]; then
+        nsid="$(ip netns list-id |
+                        sed -rn 's/^nsid ([0-9]+) \(iproute2 netns name\: '"$nsname"'\)$/\1/p')"
+
+        # Also ensures always same number of digits, so same ifname len
+        hostvpnid=`expr $nsid '*' 2`
+        nsvpnid=`expr $nsid '*' 2 + 1`
+        hostvpnifname="$(echo "vpn${hostvpnid}-${nsname}" | cut -c1-15)"
+        nsvpnifname="$(echo "vpn${nsvpnid}-${nsname}" | cut -c1-15)"
+        hostvpnipaddr="10.200.200."$hostvpnid
+        nsvpnipaddr="10.200.200."$nsvpnid
+
+        if [ -e /sys/class/net/"$hostvpnifname" ] 2>/dev/null; then
+                ip link del dev "$hostvpnifname"
+        fi
+
+        # Ty Schnouki (https://gist.github.com/Schnouki/fd171bcb2d8c556e8fdf)
+        ip link add "$hostvpnifname" type veth peer name "$nsvpnifname"
+        ip link set "$hostvpnifname" up
+        ip link set "$nsvpnifname" netns "$nsname" up
+        ip addr add "$hostvpnipaddr/31" dev "$hostvpnifname"
+        ip netns exec "$nsname" ip addr add "$nsvpnipaddr/31" dev "$nsvpnifname"
+        # ip netns exec "$nsname" ip route add 10.200.200.0/24 via "$hostvpnipaddr" dev "$nsvpnifname"
+
+        # daemon --running  calls exit() -> want to ignore with '|| true'
+        daemonrunning="$(daemon --name="socat-${nsname}" --running -v |
+                        egrep 'daemon\:  'socat-${nsname}' is running \(pid [0-9]+\)')" || true
+        if [ -n "$daemonrunning" ]; then
+                # daemon --stop  calls exit() -> want to ignore with '|| true'
+                daemon --name="socat-$nsname" --stop || true
+        fi
+        daemon --name="socat-$nsname" socat tcp-listen:$portnum,reuseaddr,fork tcp-connect:$nsvpnipaddr:$portnum
+fi
+
 if [ ! -z "$SUDO_USER" ]; then
   echo "sudo ip netns exec $nsname su '$SUDO_USER'"
 fi
 }
 
 del() {
+set -x
 if [ "$(id -u)" != "0" ]; then
   echo "$0 $cmd must be run as root"
   exit 1
@@ -211,6 +252,23 @@ fi
 
 nsname=$1;
 wgifname="$(echo "wg-${nsname}" | cut -c1-15)"
+
+nsid="$(ip netns list-id |
+                sed -rn 's/^nsid ([0-9]+) \(iproute2 netns name\: '"$nsname"'\)$/\1/p')"
+daemonrunning=""
+
+if [ $nsid ]; then
+        # Also ensures always same number of digits, so same ifname len
+        hostvpnid=`expr $nsid '*' 2`
+        hostvpnifname="$(echo "vpn${hostvpnid}-${nsname}" | cut -c1-15)"
+
+        ip link del dev "$hostvpnifname"
+
+        # daemon --running  calls exit() -> want to ignore with '|| true'
+        daemonrunning="$(daemon --name="socat-${nsname}" --running -v |
+                        egrep 'daemon\:  'socat-${nsname}' is running \(pid [0-9]+\)')" || true
+fi
+
 
 if [ -e /sys/class/net/"$wgifname" ]; then
   ip link del dev "$wgifname"
@@ -221,6 +279,11 @@ if ip netns exec "$nsname" [ -e /sys/class/net/"$wgifname" ]; then
 fi
 
 ip netns delete "$nsname"
+
+if [ -n "$daemonrunning" ]; then
+        # daemon --stop  calls exit() -> want to ignore with '|| true'
+        daemon --name="socat-$nsname" --stop || true
+fi
 }
 
 list() {
@@ -228,6 +291,20 @@ list() {
   find /etc/wireguard -name 'mullvad-*' -printf "%f\n" | column
   printf "\nNamespaces:\n"
   ip netns
+
+  printf "\nSocat Daemons:\n"
+  nsnames="$(ip netns list-id |
+                  sed -rn 's/^nsid ([0-9]+) \(iproute2 netns name\: (.*)\)$/\2/p')"
+  for nsname in $nsnames
+  do
+    # daemon --running  calls exit() -> want to ignore with '|| true'
+    daemonrunning="$(daemon --name="socat-${nsname}" --running -v |
+        egrep 'daemon\:  'socat-${nsname}' is running \(pid [0-9]+\)')" || true
+
+    if [ -n "$daemonrunning" ]; then
+      echo "socat-$nsname daemon is running"
+    fi
+  done
 }
 
 set -e

@@ -89,11 +89,16 @@ the rest of the system.
 Finally to start the mullvad wireguard interface you should use the following
 command:
 
-    $ path/to/mullvad-wg-net.sh init <myuser> mullvad-<regioncode>.conf
+    $ path/to/mullvad-wg-net.sh init <myuser> mullvad-<regioncode>.conf [<portnum>]
 
 Replace `<regioncode>` by whatever mullvad region you want to use, for example
 `mullvad-at1.conf`, you can find the full list in `/etc/wireguard/` after
 provisioning.
+
+`<portnum>`, as denoted by the square brackets (not to be used when calling), is
+optional and can be completely omitted.  It allows a single port to be mapped to
+the host IP address for routing.  This DOES create a potential leak, so only use
+if you understand and accept the **RISKS**.
 
 To make this permanent you can simply put it in `/etc/rc.local` or create a
 systemd unit or something if you insist.
@@ -138,6 +143,10 @@ can be prefaced with `sudo -u <myser>` to run as that user:
 using, or blank if not using one
 - `ip netns list-id` to list all network namespace IDs (including ones from
       outside this project)
+- `daemon --name="socat-<myuser>" --running -v` will check if a daemon is
+      running for socat in the event a port number was provided.
+  - Will report "daemon:  socat-<myuser> is running (pid 751816)" or
+        "daemon:  socat-<myuser> is not running"
 
 
 Other Uses
@@ -157,3 +166,5 @@ line `NetworkNamespacePath=/var/run/netns/<myuser>` can be added in the
 `[Service]` section.  After a reload and a restart of the service, it will now
 be operating in that network namespace.  The service should also fail to run if
 the network namespace does not exist, but best to test that failsafe.
+
+If the netns is deleted and recreated, the service likely needs to be restarted.
