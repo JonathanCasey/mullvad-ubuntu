@@ -89,7 +89,7 @@ the rest of the system.
 Finally to start the mullvad wireguard interface you should use the following
 command:
 
-    $ path/to/mullvad-wg-net.sh init <myuser> mullvad-<regioncode>.conf [<portnum>]
+    $ path/to/mullvad-wg-net.sh init <myuser> mullvad-<regioncode>.conf [<portnum>] [--bridge]
 
 Replace `<regioncode>` by whatever mullvad region you want to use, for example
 `mullvad-at1.conf`, you can find the full list in `/etc/wireguard/` after
@@ -99,6 +99,14 @@ provisioning.
 optional and can be completely omitted.  It allows a single port to be mapped to
 the host IP address for routing.  This DOES create a potential leak, so only use
 if you understand and accept the **RISKS**.
+
+The `--bridge` option (also accepts `--brg`, `--br`, `-b`), if specified after
+the `<portnum>`, will create the virtual ethernet peer pair with the host-side
+connected to a bridge.  All invocations of this script that use this option will
+connect all of those network namespaces to the same bridge on the host side.
+This will enable all network namespaces on this bridge to be able to talk to
+each other via this route if needed.  Again, only use if you understand and
+accept the **RISKS**.
 
 To make this permanent you can simply put it in `/etc/rc.local` or create a
 systemd unit or something if you insist.
@@ -112,6 +120,26 @@ a different username for each, and then be sure to use a different mullvad
 server for each (e.g. `mullvad-at1.conf` for the first and `mullvad-at2.conf`
 for the second).  No need to think about the wireguard keys, as the same one set
 of keys generated when provisioning can be used for all.
+
+Listing existing items configured through this script can be found by running:
+
+    $ path/to/mullvad-wg-net.sh list
+
+This will list the mullvad config files provisioned, namespaces setup, whether
+or not the bridge is setup for 0 or more namespaces, and any socat daemons
+running.
+
+Namespaces can be unloaded through the delete command:
+
+    $ path/to/mullvad-wg-net.sh del <myuser>
+
+This will delete the namespace, remove any associated adapters, end any socat
+daemons, and will also unload the bridge with its iptable rules if it is no
+longer being used.  In place of `<myuser>`, the bridge options used in `init`
+can also be used (e.g. `--bridge`, `-b`, etc.).  This is meant only as a last
+resort if something unclean may have left the bridge dangling.  It only deletes
+the bridge, though, so it may leave any adapters that were connected to it still
+existing.
 
 
 Security

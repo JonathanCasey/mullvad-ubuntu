@@ -135,6 +135,17 @@ if [ $# -gt 0 ]; then
 else
         portnum=0
 fi
+if [ $# -gt 0 ]; then
+        if [ $1 = "--bridge" ] || [ $1 = "--brg" ] || [ $1 = "--br" ] || [ $1 = "-b" ]; then
+                enbridge=true
+                shift
+        else
+                echo "Not supported -- specify 'bridge' to bridge veth."
+                exit 1
+        fi
+else
+        enbridge=false
+fi
 parentns=${parentns:-}
 wgifname="$(echo "wg-${nsname}" | cut -c1-15)"
 
@@ -208,13 +219,23 @@ if [ "$portnum" -gt "0" ]; then
         nsid="$(ip netns list-id |
                         sed -rn 's/^nsid ([0-9]+) \(iproute2 netns name\: '"$nsname"'\)$/\1/p')"
 
-        # Also ensures always same number of digits, so same ifname len
-        hostvpnid=`expr $nsid '*' 2`
-        nsvpnid=`expr $nsid '*' 2 + 1`
-        hostvpnifname="$(echo "vpn${hostvpnid}-${nsname}" | cut -c1-15)"
-        nsvpnifname="$(echo "vpn${nsvpnid}-${nsname}" | cut -c1-15)"
-        hostvpnipaddr="10.200.200."$hostvpnid
-        nsvpnipaddr="10.200.200."$nsvpnid
+        if $enbridge; then
+                hostvpnid=1
+                # Ensures nsid's 0 and 1 do not conflict with hostvpnid
+                nsvpnid=`expr $nsid + 2`
+                hostvpnifname="$(echo "vpnb${hostvpnid}-${nsname}" | cut -c1-15)"
+                nsvpnifname="$(echo "vpnb${nsvpnid}-${nsname}" | cut -c1-15)"
+                hostvpnipaddr="10.200.201."$hostvpnid
+                nsvpnipaddr="10.200.201."$nsvpnid
+        else
+                # Also ensures always same number of digits, so same ifname len
+                hostvpnid=`expr $nsid '*' 2`
+                nsvpnid=`expr $nsid '*' 2 + 1`
+                hostvpnifname="$(echo "vpn${hostvpnid}-${nsname}" | cut -c1-15)"
+                nsvpnifname="$(echo "vpn${nsvpnid}-${nsname}" | cut -c1-15)"
+                hostvpnipaddr="10.200.200."$hostvpnid
+                nsvpnipaddr="10.200.200."$nsvpnid
+        fi
 
         if [ -e /sys/class/net/"$hostvpnifname" ] 2>/dev/null; then
                 ip link del dev "$hostvpnifname"
@@ -224,9 +245,30 @@ if [ "$portnum" -gt "0" ]; then
         ip link add "$hostvpnifname" type veth peer name "$nsvpnifname"
         ip link set "$hostvpnifname" up
         ip link set "$nsvpnifname" netns "$nsname" up
-        ip addr add "$hostvpnipaddr/31" dev "$hostvpnifname"
-        ip netns exec "$nsname" ip addr add "$nsvpnipaddr/31" dev "$nsvpnifname"
-        # ip netns exec "$nsname" ip route add 10.200.200.0/24 via "$hostvpnipaddr" dev "$nsvpnifname"
+
+        if $enbridge; then
+                brifname="br0-mullvad"
+
+                if [ -e /sys/class/net/"$brifname" ] 2>/dev/null; then
+                        echo "Using existing bridge.  To delete, use del to delete all netns or force bridge del."
+                else
+                        ip link add "$brifname" type bridge
+                        ip link set dev "$brifname" up
+                        ip addr add "$hostvpnipaddr/24" brd + dev "$brifname"
+
+                        # Need to forward packets to/from this bridge to route from one netns to another
+                        iptables -A FORWARD -o $brifname -m comment --comment "allow packets to pass from $brifname bridge" -j ACCEPT
+                        iptables -A FORWARD -i $brifname -m comment --comment "allow input packets to pass to $brifname bridge" -j ACCEPT
+                fi
+
+                ip link set dev "$hostvpnifname" master "$brifname"
+                ip netns exec "$nsname" ip addr add "$nsvpnipaddr/24" dev "$nsvpnifname"
+                # ip netns exec "$nsname" ip route change 10.200.201.0/24 via "$hostvpnipaddr" dev "$nsvpnifname"
+        else
+                ip addr add "$hostvpnipaddr/31" dev "$hostvpnifname"
+                ip netns exec "$nsname" ip addr add "$nsvpnipaddr/31" dev "$nsvpnifname"
+                # ip netns exec "$nsname" ip route change 10.200.200.0/24 via "$hostvpnipaddr" dev "$nsvpnifname"
+        fi
 
         # daemon --running  calls exit() -> want to ignore with '|| true'
         daemonrunning="$(daemon --name="socat-${nsname}" --running -v |
@@ -250,7 +292,33 @@ if [ "$(id -u)" != "0" ]; then
   exit 1
 fi
 
-nsname=$1;
+if [ $1 = "--bridge" ] || [ $1 = "--brg" ] || [ $1 = "--br" ] || [ $1 = "-b" ]; then
+        delbridge=true
+else
+        nsname=$1;
+        delbridge=false
+fi
+
+brifname="br0-mullvad"
+
+if $delbridge; then
+
+        if [ -e /sys/class/net/"$brifname" ]; then
+                ip link del dev "$brifname"
+        fi
+
+        if [ "$(iptables-save | grep -- "-A FORWARD -o "$brifname" -m comment --comment \"allow packets to pass from "$brifname" bridge\" -j ACCEPT")" ]; then
+                iptables -D FORWARD -o $brifname -m comment --comment "allow packets to pass from $brifname bridge" -j ACCEPT
+        fi
+
+        if [ "$(iptables-save | grep -- "-A FORWARD -i "$brifname" -m comment --comment \"allow input packets to pass to "$brifname" bridge\" -j ACCEPT")" ]; then
+                iptables -D FORWARD -i $brifname -m comment --comment "allow input packets to pass to $brifname bridge" -j ACCEPT
+        fi
+
+        echo "Done deleting bridge.  Not attempting anything else."
+        exit 0
+fi
+
 wgifname="$(echo "wg-${nsname}" | cut -c1-15)"
 
 nsid="$(ip netns list-id |
@@ -258,11 +326,25 @@ nsid="$(ip netns list-id |
 daemonrunning=""
 
 if [ $nsid ]; then
+        # Don't know whether made with bridge or not, so try both
         # Also ensures always same number of digits, so same ifname len
         hostvpnid=`expr $nsid '*' 2`
         hostvpnifname="$(echo "vpn${hostvpnid}-${nsname}" | cut -c1-15)"
 
-        ip link del dev "$hostvpnifname"
+        hostvpnbrid=1
+        hostvpnbrifname="$(echo "vpnb${hostvpnbrid}-${nsname}" | cut -c1-15)"
+
+        if [ -e /sys/class/net/"$hostvpnifname" ]; then
+                ip link del dev "$hostvpnifname"
+        fi
+
+        if [ -e /sys/class/net/"$hostvpnbrifname" ]; then
+                if [ "$(bridge link show dev "$hostvpnbrifname" | grep "$brifname")" ]; then
+                        # Probably don't need this if deleting right after
+                        ip link set dev "$hostvpnbrifname" nomaster
+                fi
+                ip link del dev "$hostvpnbrifname"
+        fi
 
         # daemon --running  calls exit() -> want to ignore with '|| true'
         daemonrunning="$(daemon --name="socat-${nsname}" --running -v |
@@ -284,6 +366,21 @@ if [ -n "$daemonrunning" ]; then
         # daemon --stop  calls exit() -> want to ignore with '|| true'
         daemon --name="socat-$nsname" --stop || true
 fi
+
+if [ -e /sys/class/net/"$brifname" ]; then
+        # Only delete bridge if no devices left
+        if [ -z "$(bridge link | grep "$brifname")" ]; then
+                ip link del dev "$brifname"
+
+                if [ "$(iptables-save | grep -- "-A FORWARD -o "$brifname" -m comment --comment \"allow packets to pass from "$brifname" bridge\" -j ACCEPT")" ]; then
+                        iptables -D FORWARD -o $brifname -m comment --comment "allow packets to pass from $brifname bridge" -j ACCEPT
+                fi
+
+                if [ "$(iptables-save | grep -- "-A FORWARD -i "$brifname" -m comment --comment \"allow input packets to pass to "$brifname" bridge\" -j ACCEPT")" ]; then
+                        iptables -D FORWARD -i $brifname -m comment --comment "allow input packets to pass to $brifname bridge" -j ACCEPT
+                fi
+        fi
+fi
 }
 
 list() {
@@ -291,6 +388,13 @@ list() {
   find /etc/wireguard -name 'mullvad-*' -printf "%f\n" | column
   printf "\nNamespaces:\n"
   ip netns
+
+  brifname="br0-mullvad"
+  if [ -e /sys/class/net/"$brifname" ] && [ "$(bridge link | grep "$brifname")" ]; then
+          printf "\nBridge established.\n"
+  else
+          printf "\nNo bridge.\n"
+  fi
 
   printf "\nSocat Daemons:\n"
   nsnames="$(ip netns list-id |
