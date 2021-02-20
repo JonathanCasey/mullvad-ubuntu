@@ -196,3 +196,41 @@ be operating in that network namespace.  The service should also fail to run if
 the network namespace does not exist, but best to test that failsafe.
 
 If the netns is deleted and recreated, the service likely needs to be restarted.
+
+
+### Running commands as another user in a namespace without root
+Ok, it involves root, but only at install time, not at invocation time.
+
+The `firejail` application can be used to run commands in another network
+namespace, but please understand the **RISKS**.  From
+[firejail's docs](https://firejail.wordpress.com/documentation-2/basic-usage/):
+```
+We use this [SUID] Linux feature to start the sandbox, since most kernel
+technologies involved in sandboxing require root access. Once the sandbox is
+installed, root permissions are dropped, and the real program is started with
+regular user permissions.
+```
+
+With those risks accepted, most likely in a single user environment, it can be
+installed and configured:
+```
+# Install
+sudo apt-get install firejail
+
+# Backup config defaults
+sudo cp /etc/firejail/firejail.config /etc/firejail/firejail.config.default
+
+# Edit the config
+sudo nano /etc/firejail/firejail.confg
+  - Change "# network yes" to "network yes" (uncomment)
+  - Change "restricted-network yes" to "restricted-network no"
+```
+
+Once installed and configured, commands can be run with:
+```
+firejail --noprofile --netns=<myuser> <cmd>
+```
+Optionally, `--quiet` can also be specified between `firejail` and `<cmd>` to
+suppress firejail's messages about parent and child processes, etc. in order to
+provide output as if the command were run normally, just in a different network
+namespace.
