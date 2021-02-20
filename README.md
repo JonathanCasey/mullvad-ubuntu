@@ -214,6 +214,132 @@ the network namespace does not exist, but best to test that failsafe.
 If the netns is deleted and recreated, the service likely needs to be restarted.
 
 
+### Create and Teardown at Boot and Shutdown
+The creation can be automated to run on boot through automated means, as well as
+the teardown when shutting down.  It is not likely teardown is needed explicitly
+when shutting down, but it is added here in case it is useful either through
+manual invocation or an unknown benefit of doing it explicitly.
+
+Many common Ubuntu means can be used for this purpose.  In the past `rc0.d` and
+`rc6.d` may have worked (similar to [this](https://askubuntu.com/a/416330) but
+with an `s*` script for `rc0.d`), but systemd is now recommended.
+
+Another option is `sudo crontab -e` (since need to run as root) and using
+`@reboot` instead of the usual time/calendar parameters at the start of the
+line.
+
+For systemd, if unfamiliar, something like the following could work to create:
+```
+    $ sudo nano /etc/systemd/system/mullvad-netns-create.service
+
+### Add the following within the file ###
+[Unit]
+Description=Create mullvad netns
+
+[Service]
+Type=oneshot
+ExecStart=/path/to/mullvad-ubuntu/mullvad-wg-netns.sh init <rest-of-init-opts>
+
+[Install]
+WantedBy=multi-user.target
+
+### Save file ###
+
+    $ sudo systemctl daemon-reload
+    $ sudo systemctl enable mullvad-netns-create.service
+
+    # When want to start
+    $ sudo systemctl start mullvad-netns-create.service
+```
+
+And to teardown (untested, might need some adjustment):
+```
+    $ sudo nano /etc/systemd/system/mullvad-netns-teardown.service
+
+### Add the following within the file ###
+[Unit]
+Description=Teardown mullvad netns
+After=final.target
+
+[Service]
+Type=oneshot
+ExecStart=/path/to/mullvad-ubuntu/mullvad-wg-netns.sh del <rest-of-del-opts>
+
+[Install]
+WantedBy=final.target
+
+### Save file ###
+
+    $ sudo systemctl daemon-reload
+    $ sudo systemctl enable mullvad-netns-teardown.service
+
+    # When want to run manually right now
+    $ sudo systemctl start mullvad-netns-teardown.service
+```
+
+A better way, though, may be to combine them and leave the service "running"
+between being created and destroyed even though it does nothing in between:
+```
+    $ sudo nano /etc/systemd/system/mullvad-netns.service
+
+### Add the following within the file ###
+[Unit]
+Description=Create and destroy mullvad netns
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/path/to/mullvad-ubuntu/mullvad-wg-netns.sh init <rest-of-init-opts>
+ExecStart=/path/to/mullvad-ubuntu/mullvad-wg-netns.sh init <rest-of-2nd-init-opts>
+ExecStart=/path/to/mullvad-ubuntu/mullvad-wg-netns.sh init <rest-of-3rd-init-opts>
+
+ExecStop=/path/to/mullvad-ubuntu/mullvad-wg-netns.sh del <rest-of-del-opts>
+ExecStop=/path/to/mullvad-ubuntu/mullvad-wg-netns.sh del <rest-of-2nd-del-opts>
+ExecStop=/path/to/mullvad-ubuntu/mullvad-wg-netns.sh del <rest-of-3rd-del-opts>
+
+
+[Install]
+WantedBy=multi-user.target
+
+### Save file ###
+
+    $ sudo systemctl daemon-reload
+    $ sudo systemctl enable mullvad-netns.service
+
+    # When want to start
+    $ sudo systemctl start mullvad-netns.service
+    # When want to stop
+    $ sudo systemctl stop mullvad-netns.service
+```
+
+If using the separate service files, extra options can be added to start and
+stop as well using `ExecStart`.
+
+Regardless, it may be preferable if used with other services that rely on the
+netns to be modified to link to these.  For example, one way may be to add the
+following to the `[Unit]` section of the service file that relies on the netns:
+```
+Requires=mullvad-netns.service
+PartOf=mullvad-netns.service
+```
+Alternatively, a stronger way may be add the following instead to that same file
+and section:
+```
+BindsTo=mullvad-netns.service
+After=mullvad-netns.service
+```
+
+The former will link the starting and stopping; the latter will ensure the
+service depending on the netns will never be in an active state unless the
+`mullvad-netns.service` is also active.  This may be helpful to ensure that
+stopping the netns and possibly breaking the VPN connection will ensure that the
+other services depending on it are stopped to avoid leaking traffic.  This does
+mean the other service would need to be restarted manually.
+
+Of course, in all of these cases, a script could be created and provided as the
+arg to `ExecStart=` and `ExecStop=`.  Don't forget the `chmod +x <script>`.
+
+
 ### Running commands as another user in a namespace without root
 Ok, it involves root, but only at install time, not at invocation time.
 
