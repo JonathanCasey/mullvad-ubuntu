@@ -171,10 +171,26 @@ can be prefaced with `sudo -u <myser>` to run as that user:
 using, or blank if not using one
 - `ip netns list-id` to list all network namespace IDs (including ones from
       outside this project)
+- `ip route list` will list the routing table.
+- `ip -n <myuser> route` will list routing table in namespace.
 - `daemon --name="socat-<myuser>" --running -v` will check if a daemon is
       running for socat in the event a port number was provided.
   - Will report "daemon:  socat-<myuser> is running (pid 751816)" or
         "daemon:  socat-<myuser> is not running"
+- `ip netns exec <myuser> nc -ln <ip-addr-of-interface> <any-port> -v` can be
+      started, then `nc -4tn <same-ip-addr> <same-port> -v` to connect and send
+      messages to test connectivity established with socat.
+  - The `<ip-addr-of-interface>` should be the one assigned to the veth
+        interface when created in the `init` script when providing a port.
+  - Can use any port number, not just the one used in `init`.
+- `curl -Is <localhost-or-ip>:<port> | head -1` can be used to check http
+      response to test connectivity (if no response, nothing returned).
+- `ip netns exec vnet0 tcpdump -X -i <wgifname> -n tcp -l` and other variations
+      of `tcpdump` (e.g. `tcpdump -i br0-mullvad - nne` to monitor the bridge)
+      may be helpful for monitoring traffic, especially with the bridge setup.
+- [This](https://torguard.net/checkmytorrentipaddress.php) is a helpful way to
+      test.  Note that it often takes awhile for the IP address to show both on
+      the site and in the client.
 
 
 Other Uses
